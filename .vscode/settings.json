@@ -1,0 +1,20 @@
+{
+    "files.associations": {
+        "stdint.h": "c",
+        "modem_info.h": "c",
+        "log_ctrl.h": "c",
+        "mqtt_helper.h": "c",
+        "kernel.h": "c",
+        "lte_network.h": "c",
+        "mqtt_comm.h": "c",
+        "systemconfig.h": "c",
+        "stdlib.h": "c",
+        "nrf_modem_lib.h": "c",
+        "log.h": "c",
+        "modem_key_mgmt.h": "c",
+        "mqtt.h": "c",
+        "nrf_modem_at.h": "c",
+        "cstdio": "c",
+        "ledhandler.h": "c"
+    }
+}
