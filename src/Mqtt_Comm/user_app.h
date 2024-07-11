@@ -1,7 +1,7 @@
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __SYSTEMCONFIG_H
-#define __SYSTEMCONFIG_H
+#ifndef __USER_APP_H
+#define __USER_APP_H
 
 #ifdef __cplusplus
 extern "C"
@@ -9,48 +9,33 @@ extern "C"
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-
-/* Exported macro ------------------------------------------------------------*/
-#define PROVISION_FILE_NAME "provision"
-#define MAX_USERNAME_LENGTH 32
-#define MAX_SUBSCRIBE_TOPIC_COUNT 5
+#include <stdint.h>
+#include "mqtt_comm.h"
+#include <net/mqtt_helper.h>
 
 /* Exported types ------------------------------------------------------------*/
-typedef struct
-{
-    int InternalTemp;
-    uint8_t isNetworkConnected;
-    uint8_t isBrokerConnected;
-    uint8_t isProvisioned;
-    uint8_t ledState;
-    uint8_t DeviceIMEI[20];
-    uint8_t deviceUsername[MAX_USERNAME_LENGTH];
-    uint8_t SubscribedTopicsCount;
-}system_config_struct;
-
 /* Exported constants --------------------------------------------------------*/
+/* Exported macro ------------------------------------------------------------*/
+#define MQTT_USERNAME_FILE_NAME "username"
 
-
+#define MQTT_INTER_MESSAGE_DELAY 30 //600
 /*
 ******************************************************************************
 * GLOBAL VARIABLES
 ******************************************************************************
 */
-extern struct k_work_delayable device_provisioning_work;
-extern system_config_struct systemConfig;
 
 /*
 ******************************************************************************
 * GLOBAL Functions
 ******************************************************************************
 */
-
+void StartDataCommunication(void *p1, void *p2, void *p3);
+void parseAttributeRxMessage(struct mqtt_helper_buf *topic_buf, struct mqtt_helper_buf *payload_buf);
+void parseJsonGetStringObject(uint8_t *jsonString, uint8_t *key, uint8_t *value);
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __SYSTEMCONFIG_H */
-
-
-
+#endif /* __USER_APP_H */
 

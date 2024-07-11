@@ -15,6 +15,10 @@
         "mqtt.h": "c",
         "nrf_modem_at.h": "c",
         "cstdio": "c",
-        "ledhandler.h": "c"
+        "ledhandler.h": "c",
+        "storage.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c"
     }
 }

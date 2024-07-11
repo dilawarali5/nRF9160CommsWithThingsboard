@@ -23,6 +23,18 @@ menu "MQTT Comms with ThingsBoard"
 		help
 			Username to use when connecting to the MQTT broker.
 
+	config MQTT_DEVICE_PROVISIONING_KEY
+		string "Device Provisioning Key"
+		default ""
+		help
+			Device provisioning key to use when connecting to the MQTT broker.
+	
+	config MQTT_DEVICE_PROVISIONING_SECRET
+		string "Device Provisioning Secret"
+		default ""
+		help
+			Device provisioning secret to use when connecting to the MQTT broker.
+
 endmenu
 
 menu "Zephyr Kernel"

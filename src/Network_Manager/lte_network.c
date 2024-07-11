@@ -8,6 +8,7 @@
 #include <modem/modem_info.h>
 #include <modem/modem_key_mgmt.h>
 #include <modem/nrf_modem_lib.h>
+#include <nrf_modem_at.h>
 #include <date_time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/posix/sys/time.h>
@@ -21,8 +22,6 @@
 /* Private enumerate/structure ---------------------------------------- */
 /* Private macros ----------------------------------------------------- */
 /* Public variables --------------------------------------------------- */
-K_WORK_DELAYABLE_DEFINE(mqtt_work, mqtt_comm_start);
-
 /* Private variables -------------------------------------------------- */
 static const char cert[] = {
 	#include "ca-root.pem"
@@ -31,7 +30,10 @@ static const char cert[] = {
 /* Private function prototypes ---------------------------------------- */
 static void lte_handler(const struct lte_lc_evt *const evt);
 static void print_modem_info(enum modem_info info);
+static void reset_network(struct k_work *work);
 
+
+K_WORK_DELAYABLE_DEFINE(network_reset, reset_network);
 /* Private function definitions ---------------------------------------- */
 /**@brief 				Handler for LTE events.
  *
@@ -42,13 +44,23 @@ static void print_modem_info(enum modem_info info);
  */
 static void lte_handler(const struct lte_lc_evt *const evt)
 {
+	printk("LTE event: %d\n", evt->type);
 	switch (evt->type) 
 	{
 		case LTE_LC_EVT_NW_REG_STATUS:
+				printk("Network registration status: %d: %s\n", evt->nw_reg_status,
+					evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ? "Connected - home network" :
+					evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_ROAMING ? "Connected - roaming" :
+					evt->nw_reg_status == LTE_LC_NW_REG_SEARCHING ? "Searching" :
+					evt->nw_reg_status == LTE_LC_NW_REG_UNKNOWN ? "Unknown" :
+					"Invalid");
 				if (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME &&
 				evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING) 
                 {
-					(void)k_work_cancel_delayable(&mqtt_work);
+					systemConfig.isNetworkConnected = 0;
+					// Schedule the network reset work after 5 minutes.
+					// Need to do this when there is no events from modem and network is not connected.
+					(void)k_work_reschedule(&network_reset, K_SECONDS(300));
 					break;
 				}
 
@@ -56,9 +68,16 @@ static void lte_handler(const struct lte_lc_evt *const evt)
 				print_modem_info(MODEM_INFO_APN);
 				print_modem_info(MODEM_INFO_IP_ADDRESS);
 				print_modem_info(MODEM_INFO_RSRP);
-				(void)k_work_reschedule(&mqtt_work, K_NO_WAIT);
+				systemConfig.isNetworkConnected = 1;
 				break;
 
+		case LTE_LC_EVT_LTE_MODE_UPDATE:
+				printk("LTE mode update: %d: %s\n", evt->lte_mode,
+					evt->lte_mode == LTE_LC_LTE_MODE_NONE ? "None" :
+					evt->lte_mode == LTE_LC_LTE_MODE_LTEM ? "LTE-M" :
+					evt->lte_mode == LTE_LC_LTE_MODE_NBIOT ? "NB-IoT" :
+					"Unknown");
+				break;
 		default:
 				break;
 	}
@@ -169,6 +188,32 @@ static int cert_provision(void)
 	return 0;
 }
 
+/**@brief 				Reset network.
+ *
+ * @details 			This function is called to reset the network.
+ *
+ * @param[in]	 		None.
+ * @return 				None.
+ */
+static void reset_network(struct k_work *work)
+{
+	int32_t err = 0;
+	uint8_t atbuf[64] = {0};
+
+	if (!systemConfig.isNetworkConnected)
+	{
+		err = lte_lc_offline();
+		printk("Power off modem: %d\n", err);
+
+		err = nrf_modem_at_cmd(atbuf, sizeof(atbuf), "AT%%XFACTORYRESET=0");
+		printk("MODEM: Factory reset: %s\n", atbuf);
+
+		err = lte_lc_connect_async(lte_handler);
+		printk("Waiting for network... \n");
+	}
+
+}
+
 /* Global Function definitions ----------------------------------------------- */
 /**@brief 				Initialize network.
  *
@@ -200,6 +245,10 @@ int lte_network_init(void)
 	print_modem_info(MODEM_INFO_IMEI);
 	print_modem_info(MODEM_INFO_ICCID);
 
+	// Get device IMEI
+	err = modem_info_string_get(MODEM_INFO_IMEI, systemConfig.DeviceIMEI, sizeof(systemConfig.DeviceIMEI));
+	if (err < 0) printk("MODEM: Failed to get IMEI, error: %d\n", err);
+
     err = cert_provision();
     if (err) {
         printk("Failed to provision certificate, err %d\n", err);
@@ -216,4 +265,6 @@ int lte_network_init(void)
 
     return err;
 }
+
+
 /* End of file -------------------------------------------------------- */

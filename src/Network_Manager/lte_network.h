@@ -30,6 +30,7 @@ extern "C"
 */
 int lte_network_init(void);
 
+
 #ifdef __cplusplus
 }
 #endif

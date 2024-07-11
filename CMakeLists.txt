@@ -13,7 +13,7 @@ target_sources(app PRIVATE src/main.c)
 add_subdirectory(src/Mqtt_Comm)
 add_subdirectory(src/Network_Manager)
 add_subdirectory(src/LedHandler)
-
+add_subdirectory(src/storage)
 
 zephyr_include_directories(src)
 

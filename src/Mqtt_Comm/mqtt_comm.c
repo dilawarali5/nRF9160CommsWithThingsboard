@@ -6,11 +6,14 @@
 #include <net/mqtt_helper.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "LedHandler.h"
+#include "user_app.h"
 
 /* Private defines ---------------------------------------------------- */
 #define PUBLISH_TOPIC "v1/devices/me/telemetry"
 #define ATTRIBUTE_TOPIC "v1/devices/me/attributes"
+
+#define PROVISION_REQUEST_TOPIC  "/provision/request"
+#define PROVISION_RESPONSE_TOPIC  "/provision/response"
 
 /* ID for subscribe topic - Used to verify that a subscription succeeded in on_mqtt_suback(). */
 #define SUBSCRIBE_TOPIC_ID 2469
@@ -18,14 +21,15 @@
 /* Private enumerate/structure ---------------------------------------- */
 /* Private macros ----------------------------------------------------- */
 /* Public variables --------------------------------------------------- */
+// K_WORK_DELAYABLE_DEFINE(mqtt_work, mqtt_comm_start);
+
 /* Private variables -------------------------------------------------- */
-uint8_t publishPayloadBuffer[MQTT_PUB_BUFF_SIZE + 1] = {0};
 
 /* Private function prototypes ---------------------------------------- */
 static void MqttOnConnection(enum mqtt_conn_return_code return_code, bool session_present);
 static void MqttOnDisconnection(int result);
 static void MqttReceivedPublishedMessage(struct mqtt_helper_buf topic_buf, struct mqtt_helper_buf payload_buf);
-static int32_t publish_telemetry_data();
+
 /* Private function definitions ---------------------------------------- */
 /**@brief           MQTT connection callback.
  * 
@@ -77,13 +81,14 @@ static void MqttReceivedPublishedMessage(struct mqtt_helper_buf topic_buf, struc
 
     if (strncmp(topic_buf.ptr, ATTRIBUTE_TOPIC, topic_buf.size) == 0)
     {
-        if (strncmp(payload_buf.ptr, "{\"LED\":false}", payload_buf.size) == 0)
+        parseAttributeRxMessage(&topic_buf, &payload_buf);
+    }
+    else if (strncmp(topic_buf.ptr, PROVISION_RESPONSE_TOPIC, topic_buf.size) == 0)
+    {
+        if(strstr(payload_buf.ptr, "\"status\":\"SUCCESS\"") != NULL)
         {
-            SetLedState(0);
-        }
-        else if (strncmp(payload_buf.ptr, "{\"LED\":true}", payload_buf.size) == 0)
-        {
-            SetLedState(1);
+            systemConfig.isProvisioned = 1;
+            parseJsonGetStringObject(payload_buf.ptr, "credentialsValue", systemConfig.deviceUsername);
         }
     }
     else
@@ -93,45 +98,7 @@ static void MqttReceivedPublishedMessage(struct mqtt_helper_buf topic_buf, struc
 }
 
 
-/**@brief           Publish telemetry data to the broker.
- * 
- * @return          0 if successful, otherwise a negative value.
- * 
- */
-static int32_t publish_telemetry_data()
-{
-    int32_t ret = 0;
-    static uint16_t id = 1;
-    snprintf(publishPayloadBuffer, MQTT_PUB_BUFF_SIZE, "{\"temperature\":%d}", systemConfig.InternalTemp);
 
-    // update the publish parameters
-    struct mqtt_publish_param publish_param = {
-        .message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE,
-        .message.topic.topic = {
-            .utf8 = PUBLISH_TOPIC,
-            .size = strlen(PUBLISH_TOPIC),
-        },
-        .message.payload = {
-            .data = publishPayloadBuffer,
-            .len = strlen(publishPayloadBuffer),
-        },
-        .message_id = ++id,
-    };
-
-    ret = mqtt_helper_publish(&publish_param);
-    if (ret != 0)
-    {
-        printk("Failed to publish message: %d\n", ret);
-    }
-    else
-    {
-        printk("Published message\n");
-        printk("Topic: %s\n", PUBLISH_TOPIC);
-        printk("Payload: %s\n", publishPayloadBuffer);
-    }
-
-    return ret;
-}
 /* Global Function definitions ----------------------------------------------- */
 /**@brief           Initialize MQTT communication.
  * 
@@ -157,12 +124,15 @@ int32_t mqtt_comm_init(void)
     return 0;
 }
 
-/**@brief           Start MQTT communication.
+
+/**@brief           Connect to the MQTT broker.
  * 
- * @return          None.
+ * @param[in]       username: Username.
+ * 
+ * @return          0 if successful, otherwise a negative value.
  * 
  */
-void mqtt_comm_start()
+int32_t MqttConnect(uint8_t *username)
 {
     int32_t ret = 0;
     struct mqtt_helper_conn_params conn_params = {
@@ -175,8 +145,8 @@ void mqtt_comm_start()
             .size = strlen(CONFIG_MQTT_CLIENT_ID),
         },
         .user_name = {
-            .ptr = CONFIG_MQTT_USERNAME,
-            .size = strlen(CONFIG_MQTT_USERNAME),
+            .ptr = username,
+            .size = strlen(username),
         },
         .password = {
             .ptr = NULL,
@@ -184,12 +154,57 @@ void mqtt_comm_start()
         },
     };
 
+     // connect to the broker if not connected, and subscribe to attribute topic
+    if(systemConfig.isBrokerConnected == 1) {
+        ret = 0;
+    }
+    else {
+        ret = mqtt_helper_connect(&conn_params);
+        if (ret != 0)
+        {
+            printk("Failed to connect to MQTT broker: %d\n", ret);
+        }
+    }
+
+
+    return ret;
+}
+
+/**@brief           Provision the device with the MQTT broker.
+ * 
+ * @param           None
+ * 
+ * @return          0 if successful, otherwise a negative value.
+ * 
+ */
+int32_t MqttProvisionRequest(void )
+{
+    int32_t ret = 0;
+    static uint8_t provisionRequestPayload[MQTT_PROVISION_BUFF_SIZE + 1] = {0};
+
+    snprintf(provisionRequestPayload, MQTT_PROVISION_BUFF_SIZE, "{\"deviceName\": \"%s\", \"provisionDeviceKey\": \"%s\", \"provisionDeviceSecret\": \"%s\"}",
+                                                                systemConfig.DeviceIMEI, CONFIG_MQTT_DEVICE_PROVISIONING_KEY, CONFIG_MQTT_DEVICE_PROVISIONING_SECRET);
+    printk("Provisioning request payload: %s\n", provisionRequestPayload);
+
+    struct mqtt_publish_param publish_param = {
+        .message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE,
+        .message.topic.topic = {
+            .utf8 = PROVISION_REQUEST_TOPIC,
+            .size = strlen(PROVISION_REQUEST_TOPIC),
+        },
+        .message.payload = {
+            .data = provisionRequestPayload,
+            .len = strlen(provisionRequestPayload),
+        },
+        .message_id = 85,
+    };
+
     // Update the subscription topic list
     struct mqtt_topic mqtt_sub_topics[] = {
         {
             .topic = {
-                .utf8 = ATTRIBUTE_TOPIC,
-                .size = strlen(ATTRIBUTE_TOPIC),
+                .utf8 = PROVISION_RESPONSE_TOPIC,
+                .size = strlen(PROVISION_RESPONSE_TOPIC),
             },
         },
     };
@@ -200,33 +215,128 @@ void mqtt_comm_start()
         .message_id = SUBSCRIBE_TOPIC_ID,
     };
 
-    // connect to the broker if not connected, and subscribe to attribute topic
-    if(systemConfig.isBrokerConnected == 0)
+    ret = mqtt_helper_subscribe(&sub_list);
+    if (ret != 0)
     {
+        printk("Failed to subscribe to topic: %d\n", ret);
+        return ret;
+    }
 
-        ret = mqtt_helper_connect(&conn_params);
-        if (ret != 0)
-        {
-            printk("Failed to connect to MQTT broker: %d\n", ret);
-            return;
-        }
+    ret = mqtt_helper_publish(&publish_param);
+    if (ret != 0)
+    {
+        printk("Failed to publish message: %d\n", ret);
+    }
+    else
+    {
+        printk("Published message\n");
+        printk("Topic: %s\n", PROVISION_REQUEST_TOPIC);
+        printk("Payload: %s\n", provisionRequestPayload);
+    }
 
-        while (!systemConfig.isBrokerConnected)
-        {
-            k_sleep(K_SECONDS(1));
-        }
+    uint32_t refTime = k_uptime_get_32();
+    while (systemConfig.isProvisioned == 0)
+    {
+        k_sleep(K_SECONDS(1));
 
-        ret = mqtt_helper_subscribe(&sub_list);
-        if (ret != 0)
+        if (k_uptime_get_32() - refTime > MQTT_CONNECT_TIMEOUT)
         {
-            printk("Failed to subscribe to topic: %d\n", ret);
-            return;
+            printk("Provisioning timeout\n");
+            ret = -1;
+            break;
         }
     }
 
-    ret = publish_telemetry_data();
-    
-    (void)k_work_reschedule(&mqtt_work, K_SECONDS(600));
+    if (systemConfig.isProvisioned == 1)
+    {
+        printk("Provisioned username: %s\n", systemConfig.deviceUsername);
+    }
 
+    return ret;
+}
+
+/**@brief           Subscribe to MQTT topics.
+ * 
+ * @param[in]       topics: Array of topics to subscribe to.
+ * @param[in]       topicCount: Number of topics in the array.
+ * 
+ * @return          0 if successful, otherwise a negative value.
+ * 
+ */
+int32_t MqttTopicsSubscribe(MQTT_TOPIC_STRUCT *topics, uint8_t topicCount)
+{
+    int32_t ret = 0;
+    struct mqtt_subscription_list sub_list = {
+        .list = topics,
+        .list_count = topicCount,
+        .message_id = SUBSCRIBE_TOPIC_ID,
+    };
+
+    ret = mqtt_helper_subscribe(&sub_list);
+    if (ret != 0)
+    {
+        printk("Failed to subscribe to topic: %d\n", ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+/**@brief           Publish a message to a topic.
+ * 
+ * @param[in]       topic: Topic to publish to.
+ * @param[in]       payload: Payload to publish.
+ * 
+ * @return          0 if successful, otherwise a negative value.
+ * 
+ */
+int32_t MqttPublishMessage(uint8_t *topic, uint8_t *payload)
+{
+    int32_t ret = 0;
+    static uint16_t id = 0;
+    struct mqtt_publish_param publish_param = {
+        .message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE,
+        .message.topic.topic = {
+            .utf8 = topic,
+            .size = strlen(topic),
+        },
+        .message.payload = {
+            .data = payload,
+            .len = strlen(payload),
+        },
+        .message_id = ++id,
+    };
+
+    ret = mqtt_helper_publish(&publish_param);
+    if (ret != 0)
+    {
+        printk("Failed to publish message: %d\n", ret);
+    }
+    else
+    {
+        printk("Published message\n");
+        printk("Topic: %s\n", topic);
+        printk("Payload: %s\n", payload);
+    }
+
+    return ret;
+}
+
+/**@brief           Disconnect from the MQTT broker.
+ * 
+ * @return          0 if successful, otherwise a negative value.
+ * 
+ */
+int32_t MqttDisconnect()
+{
+    int32_t ret = 0;
+    ret = mqtt_helper_disconnect();
+    if (ret != 0)
+    {
+        printk("Failed to disconnect from MQTT broker: %d\n", ret);
+    }
+    systemConfig.isBrokerConnected = 0;
+
+    return ret;
 }
 /* End of file -------------------------------------------------------- */
