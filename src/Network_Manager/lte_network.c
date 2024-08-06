@@ -255,6 +255,9 @@ int lte_network_init(void)
         return -1;
     }
 
+	err = lte_lc_psm_req(true);
+	if (err) printk("MODEM: Failed to enable PSM, error: %d\n", err);
+
 	err = lte_lc_connect_async(lte_handler);
 	if (err) {
 		printk("Failed to connect to the LTE network, err %d\n", err);

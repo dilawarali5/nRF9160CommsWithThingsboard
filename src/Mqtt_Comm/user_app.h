@@ -18,7 +18,7 @@ extern "C"
 /* Exported macro ------------------------------------------------------------*/
 #define MQTT_USERNAME_FILE_NAME "username"
 
-#define MQTT_INTER_MESSAGE_DELAY 30 //600
+#define MQTT_INTER_MESSAGE_DELAY 600
 /*
 ******************************************************************************
 * GLOBAL VARIABLES

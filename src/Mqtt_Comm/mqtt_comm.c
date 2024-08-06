@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "user_app.h"
+#include "storage.h"
 
 /* Private defines ---------------------------------------------------- */
 #define PUBLISH_TOPIC "v1/devices/me/telemetry"
@@ -46,9 +47,17 @@ static void MqttOnConnection(enum mqtt_conn_return_code return_code, bool sessio
         printk("MQTT connection accepted\n");
         systemConfig.isBrokerConnected = 1;
     }
+    else if(return_code == MQTT_NOT_AUTHORIZED)
+    {
+        printk("MQTT connection not authorized\n");
+        systemConfig.isBrokerConnected = 0;
+        systemConfig.isProvisioned = 0;
+        memset(systemConfig.deviceUsername, 0, sizeof(systemConfig.deviceUsername));
+        eraseFile(MQTT_USERNAME_FILE_NAME, DIRECTORY);
+    }
     else
     {
-        printk("MQTT connection refused: %d\n", return_code);
+        printk("MQTT connection failed: %d\n", return_code);
     }
 }
 

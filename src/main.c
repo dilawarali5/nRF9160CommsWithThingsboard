@@ -60,7 +60,7 @@ int main(void)
 	int32_t ret = 0;
 	uint8_t ATcommandResponseBuffer[128] = {0};
 
-	printk("Starting application\n");
+	printk("Starting application_OTA_Version\n");
 	// EraseExternalFlash();
 	// return 0;
 
@@ -99,6 +99,7 @@ int main(void)
 							NULL, NULL, NULL,
 							K_HIGHEST_APPLICATION_THREAD_PRIO, K_ESSENTIAL, K_NO_WAIT);
 
+
 	// Read the nRF9160 internal temperature every 5 seconds
 	while (1)
 	{
@@ -109,11 +110,11 @@ int main(void)
 			sscanf(ATcommandResponseBuffer, "%%XTEMP: %d", &systemConfig.InternalTemp);
 		}
 
-		// ret = nrf_modem_at_cmd(ATcommandResponseBuffer, sizeof(ATcommandResponseBuffer), "AT%%XMONITOR");
-		// if (ret == 0) printk("AT Response: %s\n", ATcommandResponseBuffer);
+		ret = nrf_modem_at_cmd(ATcommandResponseBuffer, sizeof(ATcommandResponseBuffer), "AT%%XMONITOR");
+		if (ret == 0) printk("AT Response: %s\n", ATcommandResponseBuffer);
 
 		// printf("Internal temperature: %d\n", systemConfig.InternalTemp);
-		k_sleep(K_SECONDS(10));
+		k_sleep(K_SECONDS(60));
 
 	}
 	

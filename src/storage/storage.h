@@ -63,11 +63,11 @@ int32_t write_file(const uint8_t *filename, const uint8_t *data, uint32_t data_s
  *
  * @details 			Delete the file in file system to remove blob data referencing provided key value
  *
- * @param[in]	 		key					Char array. first item indicating length and rest is key data
+ * @param[in]	 		name				filename to erase.
  * @param[in]	 		directory			Char array to provide target directory
  * @param[out]   		int32_t				returns 0 for success and negative ERROR code incase of an error.
  */
-int32_t eraseBlob(uint8_t *key, uint8_t* directory);
+int32_t eraseFile(uint8_t *name, uint8_t* directory);
 
 /**@brief 				Function to list the Blob files available in file system
  *

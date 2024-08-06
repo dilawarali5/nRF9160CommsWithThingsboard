@@ -191,19 +191,17 @@ int32_t write_file(const uint8_t *filename, const uint8_t *data, uint32_t data_s
  *
  * @details 			Delete the file in file system to remove blob data referencing provided key value
  *
- * @param[in]	 		key					Char array. first item indicating length and rest is key data
+ * @param[in]	 		name				filename to erase.
  * @param[in]	 		directory			Char array to provide target directory
  * @param[out]   		int32_t				returns 0 for success and negative ERROR code incase of an error.
  */
-int32_t eraseBlob(uint8_t *key, uint8_t* directory)
+int32_t eraseFile(uint8_t *name, uint8_t* directory)
 {
-	uint8_t keyLength = key[0];
-	uint8_t *keyName = &key[1];
 	uint8_t fileName[STORAGE_FILE_MAX_PATH_LEN] = {0};
 	int32_t rc;
  	struct fs_dirent dirent;
 
-	if( (keyLength + strlen(directory)) > INPUT_NAME_MAX_LENGTH)
+	if( (strlen(name) + strlen(directory)) > INPUT_NAME_MAX_LENGTH)
 	{
 		printk("Provided file name is too long\n");
 		return -ERROR_FILE_LENGTH_NOT_SUPPORTED;
@@ -214,7 +212,7 @@ int32_t eraseBlob(uint8_t *key, uint8_t* directory)
 	#endif
 
 	/*File system path and name buffer*/
-	snprintf(fileName, STORAGE_FILE_MAX_PATH_LEN, "%s/%s/%s", littleFsMountInfo->mnt_point, directory, keyName);
+	snprintf(fileName, STORAGE_FILE_MAX_PATH_LEN, "%s/%s/%s", littleFsMountInfo->mnt_point, directory, name);
 
 	/*Mount File system before any operation*/
 	rc = fs_mount(littleFsMountInfo);
